@@ -51,5 +51,5 @@ requirements.txt
 - [x] リポジトリ初期化（フォルダ構成・共通ルール）
 - [ ] 01 PointNet
 - [ ] 02 U-Net
-- [ ] 03 DETR
+- [ ] 03 DETR（実装・動作確認済み、Colab での本番学習は未実行）
 - [ ] my_reimplementation

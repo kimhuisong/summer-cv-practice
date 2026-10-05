@@ -225,3 +225,5 @@ data/
 *.pt
 *.pth
 results/**/checkpoints/
+# --quick の動作確認の結果（本番の結果と混ざらないようにコミットしない）
+**/results/*_quick/
