@@ -49,7 +49,7 @@ requirements.txt
 
 ## 現在の状況
 - [x] リポジトリ初期化（フォルダ構成・共通ルール）
-- [ ] 01 PointNet
+- [ ] 01 PointNet（実装済み・`--quick` 動作確認済み。Colab本番は未実行）
 - [ ] 02 U-Net
 - [ ] 03 DETR
 - [ ] my_reimplementation
