@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- 深層学習プロジェクト固有 ---
+# データセット・重みファイル・チェックポイントはコミットしない
+data/
+*.pt
+*.pth
+results/**/checkpoints/
