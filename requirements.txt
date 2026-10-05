@@ -1,0 +1,10 @@
+torch>=2.1
+torchvision>=0.16
+numpy>=1.24
+scipy>=1.10          # DETR のハンガリアンマッチング (linear_sum_assignment)
+matplotlib>=3.7
+tqdm>=4.65
+pillow>=10.0
+scikit-learn>=1.3    # 混同行列などの評価指標
+pycocotools>=2.0.7   # DETR の mAP 評価
+jupyter>=1.0
