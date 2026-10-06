@@ -225,5 +225,14 @@ data/
 *.pt
 *.pth
 results/**/checkpoints/
-# --quick の動作確認の結果（本番の結果と混ざらないようにコミットしない）
+# --- 深層学習プロジェクト固有 ---
+# データセット・重みファイル・チェックポイントはコミットしない
+data/
+*.pt
+*.pth
+results/**/checkpoints/
+
+# --quick の動作確認の出力はコミットしない（本番の結果と混ざらないように）
 **/results/*_quick/
+results/quick_*/
+**/results/quick_*/
