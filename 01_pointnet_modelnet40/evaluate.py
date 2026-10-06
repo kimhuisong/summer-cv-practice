@@ -217,6 +217,7 @@ def main():
     p.add_argument("--compare", action="store_true", help="条件間の比較図・表を作る")
     p.add_argument("--results_dir", default="results")
     p.add_argument("--data_root", default="data")
+    p.add_argument("--data_url", default=None, help="最優先で試す取得元zipのURL（任意）")
     p.add_argument("--quick", action="store_true", help="CPUのみ・データの一部で動作確認")
     p.add_argument("--dummy", action="store_true", help="ダミーデータを使う（動作確認専用）")
     args = p.parse_args()
@@ -232,7 +233,7 @@ def main():
     cfg = ckpt["cfg"]
     set_seed(cfg["seed"])
     device = get_device(force_cpu=args.quick)
-    data = load_modelnet40(args.data_root, quick=args.quick, dummy=args.dummy, seed=cfg["seed"])
+    data = load_modelnet40(args.data_root, quick=args.quick, dummy=args.dummy, url=args.data_url, seed=cfg["seed"])
     model = build_model(cfg).to(device)
     model.load_state_dict(ckpt["state_dict"])
     run_evaluation(model, cfg, data, device, cond_dir, args.quick, data["source"])

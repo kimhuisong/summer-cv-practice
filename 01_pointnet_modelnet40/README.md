@@ -28,12 +28,21 @@
 - ModelNet40 の `modelnet40_ply_hdf5_2048`（PointNet 論文と同じ標準配布形式。学習 9,840 / テスト 2,468 形状、各2048点）。
 - 前処理：1形状から**1024点**をサンプル（学習は毎回ランダム、テストは先頭1024点で固定）→ 重心を原点に移し、最遠点が半径1になるよう正規化。
 - 学習時の拡張：ランダムなスケール(0.8–1.25)・平行移動(±0.1)・ガウスノイズ(σ=0.01, 上限0.05)。回転はしない（ModelNetは向きが揃っているため）。
-- 取得元（公式配布）: `https://shapenet.cs.stanford.edu/media/modelnet40_ply_hdf5_2048.zip`
-  - `train.py` は `data/` に無ければ上記URLから自動ダウンロードする（`--data_url` で別ミラーも指定可）。
-  - **このURL・他のミラーとも、この環境からは到達できなかったため、取得できることは未検証。**
-    失敗した場合は、zip を別経路で入手して `01_pointnet_modelnet40/data/` に展開し（`data/modelnet40_ply_hdf5_2048/ply_data_train0.h5` などが並ぶ形）、再実行する。
+- 取得元（`dataset.py` の `MIRROR_URLS` を先頭から順に試す。`--data_url` を渡すとそれを最優先で試す）：
+  1. 公式配布元（Stanford）: `https://shapenet.cs.stanford.edu/media/modelnet40_ply_hdf5_2048.zip`
+     — Colab からタイムアウトしたとの報告あり。
+  2. Hugging Face ミラー: `https://huggingface.co/datasets/zhangtao-whu/point_cloud_datasets/resolve/main/modelnet40_ply_hdf5_2048.zip`
+     — データセットリポジトリ `zhangtao-whu/point_cloud_datasets` のルートに同名zip（約435MB）があることは検索結果で確認したが、
+       **この直URLでのダウンロードは未検証**（この環境は HF に接続できない）。使えなければ次の手動配置へ。
+  - 通信失敗は同じURLを2回まで再試行し、zip破損・検証不一致は次のミラーへ進む。全て失敗したらエラーで止まる。
+  - **取得後（と既存データの使用前）に必ず検証する**：`ply_data_train0-4.h5` / `ply_data_test0-1.h5` の存在、
+    `data` の形状 `(n, 2048, 3)`、サンプル数 **train 9840 / test 2468**。1つでも違えばエラー。
+  - 手動配置：zip を別経路で入手して `01_pointnet_modelnet40/data/` に展開する
+    （`data/modelnet40_ply_hdf5_2048/ply_data_train0.h5` などが並ぶ形）。次回の実行時に上記の検証が走る。
+- **本番実行（`--quick` なし）でデータを用意できない／検証に通らない場合は、ダミーデータに切り替えず、エラーで停止する**
+  （`--quick` のときだけ、警告つきでダミーにフォールバックする）。
 - **ダミーデータ**（`--quick` / `--dummy` 専用）：8種の基本形状（球・立方体・円柱・円錐・トーラス・円盤・らせん・十字）× 5種の縦横比 = 40クラスを手続き的に生成。
-  本物の ModelNet40 ではなく、**動作確認にしか使わない**。結果JSONの `data_source` が `"dummy"` ならダミー。
+  本物の ModelNet40 ではなく、**動作確認にしか使わない**（`--quick` か `--dummy` 指定時のみ使われる）。結果JSONの `data_source` が `"dummy"` ならダミー。
 - `data/` は git 管理しない。
 
 ## 使い方

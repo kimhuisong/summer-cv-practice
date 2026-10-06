@@ -68,6 +68,7 @@ def main():
     p.add_argument("--quick", action="store_true", help="CPUのみ・データの一部・1エポックで動作確認")
     p.add_argument("--dummy", action="store_true", help="ダミーデータを使う（動作確認専用）")
     p.add_argument("--data_root", default="data")
+    p.add_argument("--data_url", default=None, help="最優先で試す取得元zipのURL（任意）")
     p.add_argument("--results_dir", default="results")
     p.add_argument("--no_eval", action="store_true", help="学習後の評価を省略する")
     args = p.parse_args()
@@ -82,8 +83,10 @@ def main():
     cond_dir = os.path.join(args.results_dir, name)
     os.makedirs(os.path.join(cond_dir, "checkpoints"), exist_ok=True)
 
-    data = load_modelnet40(args.data_root, quick=args.quick, dummy=args.dummy, seed=args.seed)
+    data = load_modelnet40(args.data_root, quick=args.quick, dummy=args.dummy, url=args.data_url, seed=args.seed)
     source = data["source"]
+    if source == "dummy" and not (args.quick or args.dummy):  # 二重の安全装置
+        raise RuntimeError("本番実行でダミーデータが使われようとしています。中止します。")
     print(f"[train] 条件={name} device={device} data={source} "
           f"train={len(data['train_y'])} test={len(data['test_y'])} epochs={args.epochs}")
 

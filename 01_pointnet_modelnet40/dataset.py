@@ -3,12 +3,11 @@
 本番データ: modelnet40_ply_hdf5_2048（PointNet 論文が使った標準形式）
   - 学習 9,840 / テスト 2,468 形状、1形状あたり 2048 点（表面を一様サンプリング済み）
   - ply_data_train{0..4}.h5 / ply_data_test{0,1}.h5 に data:(n,2048,3), label:(n,1)
-取得元（公式配布）: https://shapenet.cs.stanford.edu/media/modelnet40_ply_hdf5_2048.zip
-  ※ 配布元が落ちている場合は --data_url で別のミラーを指定するか、zip を手で
-    data/ に置いて展開する（README.md 参照）。
+取得元は MIRROR_URLS を先頭から順に試す（公式 → Hugging Face ミラー。README.md 参照）。
+取得後は必ず検証する（h5 ファイルの存在・サンプル数 train 9840 / test 2468・点群の形状）。
 
-ネットワーク制限で取得できない場合は、--quick / --dummy のときに限り
-ダミーデータ（手続き的に作った40クラスの点群）で動作確認だけ行う。
+ダミーデータにフォールバックするのは --quick のときだけ。
+本番実行（--quick なし）でデータを用意できなければ、警告で続行せずエラーで止める。
 """
 import glob
 import os
@@ -21,7 +20,18 @@ import torch
 
 from utils import normalize_unit_sphere
 
-DEFAULT_URL = "https://shapenet.cs.stanford.edu/media/modelnet40_ply_hdf5_2048.zip"
+# 先頭から順に試す。どれも modelnet40_ply_hdf5_2048.zip（同一内容）を指す。
+#  1. 公式配布元（Stanford）
+#  2. Hugging Face のミラー（zhangtao-whu/point_cloud_datasets のリポジトリ直下にある同名zip。
+#     リポジトリに当該zipがあることは確認したが、この直URLでの取得は未検証）
+MIRROR_URLS = [
+    "https://shapenet.cs.stanford.edu/media/modelnet40_ply_hdf5_2048.zip",
+    "https://huggingface.co/datasets/zhangtao-whu/point_cloud_datasets/resolve/main/modelnet40_ply_hdf5_2048.zip",
+]
+# 期待するファイルとサンプル数（標準の ModelNet40 hdf5_2048）
+EXPECTED_FILES = {"train": 5, "test": 2}          # ply_data_{split}{0..n-1}.h5
+EXPECTED_COUNTS = {"train": 9840, "test": 2468}
+EXPECTED_POINTS = 2048
 H5_DIRNAME = "modelnet40_ply_hdf5_2048"
 
 # ModelNet40 の40クラス名（h5 のラベル番号 0..39 に対応するアルファベット順）
@@ -44,15 +54,100 @@ def _find_h5_dir(root):
     return None
 
 
-def _download(root, url, timeout=30):
-    os.makedirs(root, exist_ok=True)
-    zip_path = os.path.join(root, os.path.basename(url))
-    print(f"[data] ダウンロード: {url}")
-    socket.setdefaulttimeout(timeout)
-    urllib.request.urlretrieve(url, zip_path)
+class DataVerificationError(RuntimeError):
+    """データのファイル欠落・サンプル数不一致など。"""
+
+
+def verify_modelnet40(h5_dir):
+    """h5 ファイルの存在と、サンプル数（train 9840 / test 2468）・点群の形状を検証する。
+
+    問題があれば DataVerificationError。通れば {"train": n, "test": n} を返す。
+    """
+    import h5py
+
+    counts = {}
+    for split, n_files in EXPECTED_FILES.items():
+        total = 0
+        for i in range(n_files):
+            path = os.path.join(h5_dir, f"ply_data_{split}{i}.h5")
+            if not os.path.isfile(path):
+                raise DataVerificationError(f"ファイルがありません: {path}")
+            try:
+                with h5py.File(path, "r") as f:
+                    shape, label_shape = f["data"].shape, f["label"].shape
+            except Exception as e:  # 壊れたファイル・途中で切れたダウンロード
+                raise DataVerificationError(f"h5 を読めません: {path} ({type(e).__name__}: {e})")
+            if len(shape) != 3 or shape[1:] != (EXPECTED_POINTS, 3):
+                raise DataVerificationError(f"data の形状が (n, {EXPECTED_POINTS}, 3) ではありません: {path} {shape}")
+            if label_shape[0] != shape[0]:
+                raise DataVerificationError(f"data と label の数が違います: {path}")
+            total += shape[0]
+        if total != EXPECTED_COUNTS[split]:
+            raise DataVerificationError(
+                f"{split} のサンプル数が期待値と違います: {total}（期待 {EXPECTED_COUNTS[split]}）")
+        counts[split] = total
+    return counts
+
+
+def _fetch_zip(url, zip_path, timeout=60, chunk=1 << 20):
+    """url を zip_path にストリーミング保存する（timeout は接続・読み込みの無通信時間）。"""
+    with urllib.request.urlopen(url, timeout=timeout) as r, open(zip_path, "wb") as f:
+        total = int(r.headers.get("Content-Length") or 0)
+        done, last = 0, 0
+        while True:
+            buf = r.read(chunk)
+            if not buf:
+                break
+            f.write(buf)
+            done += len(buf)
+            if done - last >= 50 * chunk:   # 50MBごとに進捗を表示
+                print(f"[data]   {done / 1e6:.0f}MB" + (f" / {total / 1e6:.0f}MB" if total else ""))
+                last = done
+        if total and done != total:
+            raise IOError(f"ダウンロードが途中で切れました: {done}/{total} bytes")
+
+
+def _try_url(root, url, zip_path):
+    """1つの URL から取得 → 展開 → 検証。成功したら h5 のディレクトリを返す。失敗は例外。"""
+    _fetch_zip(url, zip_path)
     with zipfile.ZipFile(zip_path) as zf:
         zf.extractall(root)
-    os.remove(zip_path)
+    h5_dir = _find_h5_dir(root)
+    if h5_dir is None:
+        raise DataVerificationError("zip の中に ply_data_train*.h5 がありません")
+    counts = verify_modelnet40(h5_dir)
+    print(f"[data] 取得・検証 OK: train={counts['train']} test={counts['test']} ({url})")
+    return h5_dir
+
+
+def download_modelnet40(root, urls, attempts=2):
+    """urls を順に試し、取得 → 展開 → 検証まで通ったら h5 のディレクトリを返す。
+
+    失敗（接続・タイムアウト・zip破損・検証不一致）したら次のミラーへ進む。
+    通信エラーは同じ URL を attempts 回まで再試行し、zip破損・検証不一致は再試行しない。
+    全部失敗したら RuntimeError（原因を URL ごとに列挙）。
+    """
+    os.makedirs(root, exist_ok=True)
+    zip_path = os.path.join(root, "modelnet40_ply_hdf5_2048.zip.part")
+    failures = []
+    for url in urls:
+        error = None
+        for attempt in range(1, attempts + 1):
+            print(f"[data] 取得を試行 ({attempt}/{attempts}): {url}")
+            try:
+                return _try_url(root, url, zip_path)
+            except (DataVerificationError, zipfile.BadZipFile) as e:
+                error = e
+                print(f"[data]   失敗: {type(e).__name__}: {e}")
+                break                      # 中身が違う・壊れている。再試行しても同じ
+            except Exception as e:         # タイムアウト・接続拒否・403 など
+                error = e
+            finally:
+                if os.path.exists(zip_path):
+                    os.remove(zip_path)
+            print(f"[data]   失敗: {type(error).__name__}: {error}")
+        failures.append(f"  - {url}\n      {type(error).__name__}: {error}")
+    raise RuntimeError("全ての取得元で失敗しました:\n" + "\n".join(failures))
 
 
 def _load_h5_split(h5_dir, split):
@@ -128,21 +223,31 @@ def make_dummy_dataset(n_train_per_class, n_test_per_class, n_points=1024, seed=
 
 
 # ---------------------------------------------------------------- 入口
-def load_modelnet40(root, quick=False, dummy=False, url=DEFAULT_URL, seed=0):
+def load_modelnet40(root, quick=False, dummy=False, url=None, seed=0):
     """データを読み込んで dict で返す。
 
     返り値: {train_x:(M,P,3), train_y:(M,), test_x, test_y, class_names, source}
       P は1形状あたりの保存点数（本番は2048、ダミーは1024）。
       source は "modelnet40" か "dummy"（結果JSONに必ず記録して区別する）。
+
+    url を指定するとそれを最優先で試し、続けて MIRROR_URLS を順に試す。
+    ダミーにフォールバックするのは quick=True のときだけ。quick=False（本番）で
+    データを用意できない・検証に通らない場合は、例外を投げて止まる（警告で続行しない）。
     """
     if not dummy:
-        h5_dir = _find_h5_dir(root)
-        if h5_dir is None:
-            try:
-                _download(root, url)
-                h5_dir = _find_h5_dir(root)
-            except Exception as e:  # ネットワーク不通・配布元停止など
-                print(f"[data] ModelNet40 を取得できませんでした: {type(e).__name__}: {e}")
+        urls = ([url] if url else []) + [u for u in MIRROR_URLS if u != url]
+        problem = None
+        try:
+            h5_dir = _find_h5_dir(root)
+            if h5_dir is not None:
+                verify_modelnet40(h5_dir)        # 既存データも検証する（欠落・破損の検出）
+                print(f"[data] 既存の ModelNet40 を使用（検証 OK）: {h5_dir}")
+            else:
+                h5_dir = download_modelnet40(root, urls)
+        except Exception as e:
+            h5_dir, problem = None, e
+            print(f"[data] ModelNet40 を用意できませんでした: {type(e).__name__}: {e}")
+
         if h5_dir is not None:
             train_x, train_y = _load_h5_split(h5_dir, "train")
             test_x, test_y = _load_h5_split(h5_dir, "test")
@@ -153,12 +258,15 @@ def load_modelnet40(root, quick=False, dummy=False, url=DEFAULT_URL, seed=0):
                 train_x, train_y, test_x, test_y = train_x[tr], train_y[tr], test_x[te], test_y[te]
             return dict(train_x=train_x, train_y=train_y, test_x=test_x, test_y=test_y,
                         class_names=MODELNET40_CLASSES, source="modelnet40")
+
         if not quick:
+            # 本番でダミーに落とすと「本物の結果」に見える数値が出てしまうので、必ず止める
             raise RuntimeError(
-                "ModelNet40 が見つからず、ダウンロードにも失敗しました。"
-                "README.md の手順で data/ に配置するか --data_url を指定してください。"
-                "（動作確認だけなら --quick か --dummy）")
-        print("[data] !!! ダミーデータにフォールバックします（本物の ModelNet40 ではありません）")
+                "本番実行(--quick なし)ですが ModelNet40 を用意できません。ダミーデータには"
+                "フォールバックしません。README.md の「データの取得」に従って手動配置するか、"
+                "--data_url で取得元を指定してください。動作確認だけなら --quick を付けてください。\n"
+                f"原因: {type(problem).__name__}: {problem}") from problem
+        print("[data] !!! --quick のためダミーデータにフォールバックします（本物の ModelNet40 ではありません）")
 
     train_x, train_y, test_x, test_y = make_dummy_dataset(10, 5, seed=seed)
     return dict(train_x=train_x, train_y=train_y, test_x=test_x, test_y=test_y,
