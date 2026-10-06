@@ -1,0 +1,99 @@
+{
+  "small_example": {
+    "cost_matrix": [
+      [
+        4.854827,
+        -1.942134,
+        6.09517
+      ],
+      [
+        -2.252507,
+        5.022357,
+        5.751489
+      ],
+      [
+        -1.843065,
+        5.108646,
+        5.983428
+      ],
+      [
+        5.644795,
+        9.9884,
+        9.907126
+      ],
+      [
+        5.625865,
+        6.031473,
+        -1.444309
+      ]
+    ],
+    "brute_force": {
+      "pred": [
+        0,
+        1,
+        4
+      ],
+      "tgt": [
+        1,
+        0,
+        2
+      ],
+      "min_cost": -5.63895058631897
+    },
+    "scipy": {
+      "pred": [
+        0,
+        1,
+        4
+      ],
+      "tgt": [
+        1,
+        0,
+        2
+      ]
+    },
+    "library": {
+      "pred": [
+        0,
+        1,
+        4
+      ],
+      "tgt": [
+        1,
+        0,
+        2
+      ]
+    },
+    "target_classes": [
+      "person",
+      "dog",
+      "no-object",
+      "no-object",
+      "car"
+    ],
+    "my_losses": {
+      "loss_ce": 0.5342729687690735,
+      "loss_bbox": 0.07000000774860382,
+      "loss_giou": 0.21492250263690948
+    },
+    "library_losses": {
+      "loss_ce": 0.5342729091644287,
+      "loss_bbox": 0.07000000774860382,
+      "loss_giou": 0.21492250263690948
+    },
+    "duplicate_query_assigned_no_object": "p2",
+    "matching_equal": true,
+    "losses_equal": true
+  },
+  "random_example": {
+    "num_trials": 20,
+    "matching_equal": true,
+    "max_abs_loss_diff": 1.430511474609375e-06
+  },
+  "model_loss": {
+    "library_loss": 41.89270782470703,
+    "detr_loss": 41.89270782470703,
+    "abs_diff": 0.0
+  },
+  "all_checks_passed": true
+}
