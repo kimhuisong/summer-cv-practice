@@ -225,3 +225,7 @@ data/
 *.pt
 *.pth
 results/**/checkpoints/
+
+# 01_pointnet: 動作確認(--quick)の出力はコミットしない
+results/quick_*/
+**/results/quick_*/
